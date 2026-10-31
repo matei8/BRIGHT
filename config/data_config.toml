@@ -1,0 +1,27 @@
+[data]
+dataset_root = "../dataset/BRIGHT" # pre-event/ post-event/ target/
+suffix = ".tif"
+crop_size = 512
+ignore_index = 255 # padded / nodata label (excluded from loss & metrics)
+
+# Optical normalization (RGB)
+[data.optical_norm]
+mean = [123.675, 116.28, 103.53]
+std = [58.395, 57.12, 57.375]
+
+# SAR normalization
+[data.sar_norm]
+mean = 59.121
+std = 45.478
+
+# Official standard_ML split files
+[splits]
+train = "splits/standard_ML/train_set.txt"
+val = "splits/standard_ML/val_set.txt"
+test = "splits/standard_ML/test_set.txt"
+
+# Whether each split applies data augmentation (train augments; val/test do not).
+[augmentation]
+train = true
+val = false
+test = false
