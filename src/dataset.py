@@ -6,7 +6,7 @@ item returns the two streams separately; the model input is formed downstream as
 ``torch.cat([optical, sar], dim=1)`` -> 4 channels.
 
 All settings come from a single ``DataConfig`` (see src/config.py), loaded from
-``config/data_config.toml``.
+``config/baseline.toml``.
 """
 
 import os
@@ -70,7 +70,11 @@ class BrightDataset(Dataset):
         return optical, sar, torch.from_numpy(loc), torch.from_numpy(clf), name
 
 
-def build_loader(dataset, batch_size, shuffle, num_workers=0, drop_last=False, pin_memory=True):
-    """Thin DataLoader wrapper. num_workers defaults to 0 for Windows safety."""
+def build_loader(dataset, batch_size, shuffle, num_workers=0, drop_last=False, pin_memory=True,
+                 worker_init_fn=None, generator=None):
+    """Thin DataLoader wrapper. With num_workers > 0 on Windows, the calling
+    script must guard its entry point with ``if __name__ == "__main__":``."""
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers,
-                      drop_last=drop_last, pin_memory=pin_memory)
+                      drop_last=drop_last, pin_memory=pin_memory,
+                      worker_init_fn=worker_init_fn, generator=generator,
+                      persistent_workers=num_workers > 0)

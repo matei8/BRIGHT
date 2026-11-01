@@ -48,3 +48,51 @@ class DataConfig:
             sar_std=float(data["sar_norm"]["std"]),
             suffix=str(data.get("suffix", ".tif")),
         )
+
+
+@dataclass
+class TrainConfig:
+    """Training / evaluation / runtime settings, from [train] and [runtime]."""
+
+    run_name: str
+    seed: int
+    epochs: int
+    max_steps: int             # 0 = full epochs
+    train_batch_size: int
+    eval_batch_size: int
+    eval_tile_size: int        # sliding-window size for val/test inference
+    learning_rate: float
+    weight_decay: float
+    lovasz_weight: float
+    num_classes: int
+    in_channels: int
+    val_every: int
+    amp: bool
+    deterministic: bool
+    num_workers: int
+    pin_memory: bool
+
+    @classmethod
+    def from_toml(cls, path: str | Path) -> "TrainConfig":
+        with open(path, "rb") as f:
+            raw = tomllib.load(f)
+        t, r = raw["train"], raw.get("runtime", {})
+        return cls(
+            run_name=str(t["run_name"]),
+            seed=int(t.get("seed", 42)),
+            epochs=int(t["epochs"]),
+            max_steps=int(t.get("max_steps", 0)),
+            train_batch_size=int(t["train_batch_size"]),
+            eval_batch_size=int(t.get("eval_batch_size", 1)),
+            eval_tile_size=int(t.get("eval_tile_size", 512)),
+            learning_rate=float(t["learning_rate"]),
+            weight_decay=float(t["weight_decay"]),
+            lovasz_weight=float(t.get("lovasz_weight", 0.75)),
+            num_classes=int(t.get("num_classes", 4)),
+            in_channels=int(t.get("in_channels", 4)),
+            val_every=int(t.get("val_every", 1)),
+            amp=bool(r.get("amp", True)),
+            deterministic=bool(r.get("deterministic", True)),
+            num_workers=int(r.get("num_workers", 0)),
+            pin_memory=bool(r.get("pin_memory", True)),
+        )

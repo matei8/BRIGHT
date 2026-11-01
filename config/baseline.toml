@@ -1,0 +1,48 @@
+[data]
+dataset_root = "../dataset/BRIGHT" # pre-event/ post-event/ target/
+suffix = ".tif"
+crop_size = 512
+ignore_index = 255 # padded / nodata label (excluded from loss & metrics)
+
+# Optical normalization (RGB) — ImageNet stats, as in the published baseline
+[data.optical_norm]
+mean = [123.675, 116.28, 103.53]
+std = [58.395, 57.12, 57.375]
+
+# SAR normalization (raw 8-bit amplitude)
+[data.sar_norm]
+mean = 59.121
+std = 45.478
+
+# Official standard_ML split files
+[splits]
+train = "splits/standard_ML/train_set.txt"
+val = "splits/standard_ML/val_set.txt"
+test = "splits/standard_ML/test_set.txt"
+
+# Whether each split applies data augmentation (train augments; val/test do not).
+[augmentation]
+train = true
+val = false
+test = false
+
+[train]
+run_name = "unet_baseline_50_16"
+seed = 42
+epochs = 50
+max_steps = 0          # 0 = full epochs; >0 caps steps per epoch (debug)
+train_batch_size = 16
+eval_batch_size = 1
+eval_tile_size = 512   # val/test: each 1024 tile -> 4 x 512 windows, stitched
+learning_rate = 1e-4
+weight_decay = 5e-3
+lovasz_weight = 0.75
+num_classes = 4
+in_channels = 4
+val_every = 1          # validate every N epochs; best.pth = best val mIoU
+
+[runtime]
+amp = true             # mixed precision for training (eval stays fp32)
+deterministic = true   # cuDNN deterministic kernels (reproducible, a bit slower)
+num_workers = 4        # 0 = load in the main process (slower, simplest)
+pin_memory = true
