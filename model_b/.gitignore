@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.env
+.venv/
+venv/
+data/
+datasets_raw/
+*.tif
+*.tiff
+*.pth
+*.pt
+*.ckpt
+results/**/*
+!results/README.md
