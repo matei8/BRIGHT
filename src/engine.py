@@ -47,7 +47,8 @@ def train_one_epoch(model, loader, optimizer, device, loss_fn, forward_fn=early_
     use_amp = amp_dtype is not None and device.type == "cuda"
     total, n = 0.0, 0
 
-    pbar = tqdm(loader, desc=desc, leave=False, total=max_steps or len(loader), disable=disable_pbar)
+    pbar = tqdm(loader, desc=desc, leave=False, total=min(max_steps, len(loader)) if max_steps else len(loader),
+                disable=disable_pbar)
     t_start = t_fetch = time.time()
     data_wait = 0.0
     for step, (optical, sar, _loc, clf, _names) in enumerate(pbar):

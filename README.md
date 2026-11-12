@@ -125,7 +125,10 @@ One-time setup on fep:
 ```bash
 git clone git@github.com:matei8/BRIGHT.git && cd BRIGHT     # then: git checkout <branch>
 # container (Python 3.11 + torch 2.5.1/CUDA 12.4); build on a node, or build locally and rsync:
-srun -A student -p dgxa100 --pty apptainer build --fakeroot ~/bright.sif cluster/bright.def
+srun -A student -p haswell --cpus-per-task=8 --mem=16G --time=01:00:00 --pty bash   # CPU node
+apptainer build --fakeroot --ignore-fakeroot-command ~/bright.sif cluster/bright.def
+apptainer test ~/bright.sif     # -> python ok, torch 2.5.1+cu124
+exit
 # in ~/.bashrc:
 export BRIGHT_DATA_ROOT=/path/on/cluster/to/BRIGHT_DATASET   # holds pre-event/ post-event/ target/
 export BRIGHT_SIF=~/bright.sif
