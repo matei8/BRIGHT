@@ -15,6 +15,91 @@ the reference every later experiment is measured against:
 | E5 | encoder initialization (scratch vs pretrained) | ImageNet should help optical, little for SAR |
 | E6 | cross-event transfer | zero-shot mIoU is <40% for every benchmark model |
 
+## Setup (each person, once per machine)
+
+**1. Python environment** — Python **≥ 3.11** (the config loader uses `tomllib`).
+
+```bash
+conda create -n bright python=3.12 -y
+conda activate bright
+# install the torch build matching your CUDA, e.g. CUDA 12.4:
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+pip install -r requirements.txt
+```
+
+**2. Point the code at the data** — the folder that holds `pre-event/ post-event/ target/`
+(4,246 `.tif`s each). Paths are personal, so they are **not** stored in git; set the
+`BRIGHT_DATA_ROOT` environment variable instead:
+
+```bash
+# Linux / macOS, stored in the conda env (applied on every `conda activate bright`):
+conda env config vars set BRIGHT_DATA_ROOT=/path/to/BRIGHT_DATASET
+conda activate bright
+
+# Windows (then open a new terminal):
+setx BRIGHT_DATA_ROOT "D:\path\to\BRIGHT_DATASET"
+```
+
+Alternatively keep the data at `../dataset/BRIGHT` (next to the repo) — that is the default
+and needs no variable. A wrong path fails immediately with a message listing what is missing.
+
+**3. Check it works**
+
+```bash
+python -c "from src.config import DataConfig; from src.dataset import BrightDataset; \
+d = BrightDataset(DataConfig.from_toml('config/data_config.toml', 'train', 'local')); \
+o, s, l, y, n = d[0]; print(len(d), n, o.shape, s.shape, y.shape)"
+# expected: 2918 <tile name> torch.Size([3, 512, 512]) torch.Size([1, 512, 512]) torch.Size([512, 512])
+```
+
+## Configuration — one codebase, any machine
+
+Settings are layered; later layers win:
+
+| # | Layer | What goes there |
+|---|-------|-----------------|
+| 1 | `config/data_config.toml` (base) | **The experiment**: normalization, crop, splits, training recipe. Same on every machine. |
+| 2 | `config/env/<profile>.toml` | **Machine-specific only**: batch size, workers, step count, precision. |
+| 3 | `$BRIGHT_DATA_ROOT` | Your data path. |
+| 4 | `--set key=value` | One-off overrides from the command line, e.g. `--set train.lr=3e-4`. |
+
+Provided profiles:
+
+| | base (official recipe) | `local` (smoke test, small GPU) | `cluster` (A100 / H100) |
+|---|---|---|---|
+| crop | 640 | 512 | 640 |
+| batch | 16 | 2 | 16 |
+| steps | 50,000 (= official 800k samples) | 200 | 50,000 |
+| validate every | 2,500 | 100 | 2,500 |
+| precision | fp32 | fp32 | bf16 |
+| workers | 4 | 4 | 16 |
+
+In Python: `DataConfig.from_toml('config/data_config.toml', split, env='cluster', overrides=['train.lr=3e-4'])`,
+or `load_config(...)` for the full dict. Scripts will expose the same as `--env` / `--set`.
+
+**Your own profile.** If your GPU needs different settings, create `config/env/<name>.toml`
+with *only* the keys you change and use `--env <name>`:
+
+```toml
+# config/env/matei.toml
+[train]
+batch_size = 4
+[loader]
+num_workers = 0   # Windows
+```
+
+**Rules**
+
+- Profiles and `--set` may only change keys that **exist in the base config** — a typo
+  (`train.lrr`) raises an error instead of being silently ignored.
+- **Only cluster runs are reported.** `local` changes crop/batch/steps, so its numbers are
+  meaningless — it exists to catch bugs before spending cluster time.
+- Never put experiment choices (normalization, crop, recipe) in a personal profile; change
+  them in the base config, in a commit everyone sees.
+
+> **Status:** data loading + configuration are ready. Model, loss, metrics and the
+> `scripts/train.py` / `scripts/evaluate.py` entry points are in progress (see *Build order*).
+
 ## Decision: build it here, mirroring the official repo
 
 > **Build our own clean U-Net in this `codebase/`, implementing the exact
@@ -51,7 +136,8 @@ scripts, and per-run outputs each get their own place.
 ```
 codebase/
   config/
-    baseline.yaml            # paths, hyperparams, reduced schedule, seed, norm stats, flags
+    data_config.toml         # base config: data, norm stats, splits, training recipe
+    env/{local,cluster}.toml # machine profiles layered on top (see Configuration)
   src/                       # importable library code
     dataset.py               # BrightDataset: 4-ch (optical 3 + SAR 1), official split
     transforms.py            # channel-aware normalize + crop/flip/rot (from imutils)
@@ -122,7 +208,7 @@ self-documenting and reproducible.
 
 ## Cropping
 
-Training crops 1024 tiles to **512** patches **on the fly** (random crop per sample each
+Training crops 1024 tiles to **640** patches (official recipe; `local` profile uses 512) **on the fly** (random crop per sample each
 epoch), matching the repo recipe — this keeps the informative-region oversampling
 (`cat_max_ratio`) and full augmentation variety. `scripts/preprocess.py --precrop` can
 instead cache fixed 512 patches to disk as an opt-in speed lever (config flag selects the
