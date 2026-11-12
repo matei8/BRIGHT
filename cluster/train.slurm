@@ -13,7 +13,7 @@
 #   BRIGHT_SIF         path to bright.sif   (default: ~/bright.sif)
 #
 # Always runs train.py with --resume: a fresh run starts from scratch, an interrupted
-# one continues from checkpoints/<run>/last.pth. If the 24 h limit approaches, SLURM's
+# one continues from checkpoints/<run>/last.pth. If the time limit approaches, SLURM's
 # early SIGTERM makes train.py stop cleanly (exit 3) and this script resubmits itself.
 # When training finishes, best.pth is evaluated on val and test.
 #SBATCH -A student
@@ -21,7 +21,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
-#SBATCH --time=24:00:00
+#SBATCH --time=06:00:00     # student account max is 12:00:00; a full run on H100 is ~2 h
 #SBATCH --signal=B:TERM@300
 #SBATCH --job-name=bright
 #SBATCH --output=slurm-%x-%j.out

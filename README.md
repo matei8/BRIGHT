@@ -146,7 +146,8 @@ squeue -u $USER;  tail -f slurm-bright-<jobid>.out
 
 The job copies the 21 GB dataset to node-local disk if there is room (otherwise reads the
 shared copy), trains with `--env cluster --resume`, then evaluates `best.pth` on val and test.
-Near the 24 h limit, SLURM's early SIGTERM makes training stop cleanly and the job
+The job asks for 6 h (the `student` account allows at most 12 h per job; a full run on an H100
+is ~2 h, on an A100 more). Near the limit, SLURM's early SIGTERM makes training stop cleanly and the job
 **resubmits itself**; the new job resumes.
 
 Always `git pull` and commit before submitting: `run_config.json` records the commit, and a
