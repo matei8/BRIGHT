@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import os
 import random
+import socket
+import subprocess
+import sys
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -51,7 +56,9 @@ def save_checkpoint(path, model, optimizer=None, epoch=None, best_metric=None, e
         "best_metric": best_metric,
         "extra": extra or {},
     }
-    torch.save(state, path)
+    tmp = str(path) + ".tmp"
+    torch.save(state, tmp)
+    os.replace(tmp, path)  # atomic: a job killed mid-save never leaves a corrupt checkpoint
 
 
 def load_checkpoint(path, model, optimizer=None, map_location="cpu") -> dict:
@@ -60,3 +67,42 @@ def load_checkpoint(path, model, optimizer=None, map_location="cpu") -> dict:
     if optimizer is not None and state.get("optimizer") is not None:
         optimizer.load_state_dict(state["optimizer"])
     return state
+
+
+# --------------------------- resume + provenance ---------------------------
+
+def rng_state() -> dict:
+    """Python / numpy / torch RNG state (store in a checkpoint to resume reproducibly)."""
+    return {"python": random.getstate(), "numpy": np.random.get_state(), "torch": torch.get_rng_state(),
+            "cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None}
+
+
+def set_rng_state(s: dict) -> None:
+    random.setstate(s["python"])
+    np.random.set_state(s["numpy"])
+    torch.set_rng_state(s["torch"].cpu())
+    if s.get("cuda") is not None and torch.cuda.is_available():
+        torch.cuda.set_rng_state_all([t.cpu() for t in s["cuda"]])
+
+
+def git_info(root: Path = CODEBASE_ROOT) -> dict:
+    def run(*args):
+        try:
+            return subprocess.check_output(["git", *args], cwd=root, stderr=subprocess.DEVNULL).decode().strip()
+        except Exception:
+            return None
+    return {"commit": run("rev-parse", "HEAD"), "branch": run("rev-parse", "--abbrev-ref", "HEAD"),
+            "dirty": bool(run("status", "--porcelain", "--untracked-files=no"))}
+
+
+def machine_info(device: torch.device) -> dict:
+    return {
+        "host": socket.gethostname(),
+        "python": sys.version.split()[0],
+        "torch": torch.__version__,
+        "cuda": torch.version.cuda,
+        "gpu": torch.cuda.get_device_name(0) if device.type == "cuda" else None,
+        "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+        "argv": sys.argv,
+        "time": datetime.now().isoformat(timespec="seconds"),
+    }

@@ -15,6 +15,140 @@ the reference every later experiment is measured against:
 | E5 | encoder initialization (scratch vs pretrained) | ImageNet should help optical, little for SAR |
 | E6 | cross-event transfer | zero-shot mIoU is <40% for every benchmark model |
 
+## Setup (each person, once per machine)
+
+**1. Python environment**: Python **≥ 3.11** (the config loader uses `tomllib`).
+
+```bash
+conda create -n bright python=3.12 -y
+conda activate bright
+# install the torch build matching your CUDA, e.g. CUDA 12.4:
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+pip install -r requirements.txt
+```
+
+**2. Point the code at the data**: the folder holding `pre-event/ post-event/ target/`
+(4,246 `.tif`s each). Paths are personal, so they are **not** stored in git; set
+`BRIGHT_DATA_ROOT` instead:
+
+```bash
+# Linux / macOS, stored in the conda env (applied on every `conda activate bright`):
+conda env config vars set BRIGHT_DATA_ROOT=/path/to/BRIGHT_DATASET
+conda activate bright
+
+# Windows (then open a new terminal):
+setx BRIGHT_DATA_ROOT "D:\path\to\BRIGHT_DATASET"
+```
+
+Or keep the data at `../dataset/BRIGHT` (next to the repo), which is the default. A wrong path
+fails immediately with a message listing what is missing.
+
+**3. Smoke test** (~3 min on a small GPU; checks the whole pipeline; numbers are meaningless):
+
+```bash
+python scripts/train.py --env local --run-name smoke
+```
+
+## Configuration: one codebase, any machine
+
+Settings are layered; later layers win:
+
+| # | Layer | What goes there |
+|---|-------|-----------------|
+| 1 | `config/baseline.toml` | **The experiment**: data, normalization, crop, splits, training recipe. Same on every machine. |
+| 2 | `config/env/<profile>.toml` | **Machine-specific only**: batch size, workers, precision, eval windowing, smoke-test length. |
+| 3 | `$BRIGHT_DATA_ROOT` | Your data path. |
+| 4 | `--set key=value` | One-off overrides, e.g. `--set train.learning_rate=3e-4` (the old `--epochs`, `--batch-size`, ... flags still work and map to these). |
+
+| | base (official recipe) | `local` (smoke test, small GPU) | `cluster` (A100 / H100) |
+|---|---|---|---|
+| crop | 640 | 512 | 640 |
+| batch | 16 | 2 | 16 |
+| schedule | `max_samples = 800000` → 275 epochs ≈ 50k steps (= official `--max_iters`) | 2 epochs × 50 steps | 800k samples |
+| validation | every 10 epochs, full 1024 tiles | every epoch, 20 tiles, 512 windows | every 10 epochs, full 1024 tiles |
+| precision | fp16 | fp32 | bf16 |
+| workers | 4 | 4 | 16 |
+
+The schedule is in **samples**, like the official `--max_iters` (which counts samples, not
+steps): `epochs = ceil(max_samples / samples_per_epoch)`, so changing the batch size never
+silently shortens training. Set `train.max_samples = 0` to use `train.epochs` instead.
+
+**Your own profile.** If your GPU needs different settings, create `config/env/<name>.toml`
+with *only* the keys you change and use `--env <name>`:
+
+```toml
+# config/env/matei.toml
+[train]
+train_batch_size = 4
+[runtime]
+amp = "fp16"
+num_workers = 0   # Windows
+```
+
+**Rules**
+
+- Profiles and `--set` may only change keys that **exist in `baseline.toml`**: a typo
+  (`train.learning_rat`) raises an error instead of being silently ignored.
+- **Only cluster runs are reported.** `local` changes crop/batch/schedule, so its numbers are
+  meaningless; it exists to catch bugs before spending cluster time.
+- Never put experiment choices (normalization, crop, recipe) in a personal profile; change
+  them in `baseline.toml`, in a commit everyone sees.
+
+## Training and evaluation
+
+```bash
+python scripts/train.py --env local --run-name smoke                  # smoke test
+python scripts/train.py --env cluster --run-name unet_a_s42           # full official schedule
+python scripts/train.py --env cluster --run-name unet_a_s42 --resume  # continue an interrupted run
+python scripts/evaluate.py --env cluster --run unet_a_s42 --split test [--ckpt last] [--save-preds]
+```
+
+| output | content |
+|------|---------|
+| `results/<run>/run_config.json` | resolved config (all layers), schedule, git commit, GPU/torch versions: *what actually ran* |
+| `results/<run>/metrics.csv` | per epoch: train loss, samples/s, `data_wait_frac` (high = data loading is the bottleneck), val metrics |
+| `results/<run>/eval_<split>_<ckpt>.json` | full report: overall, **event-level mIoU**, per-event, per-disaster-type, confusion matrix |
+| `checkpoints/<run>/best.pth`, `last.pth` | best-on-val weights / full resumable state (incl. RNG) |
+
+An existing run is never overwritten: without `--resume`, `train.py` refuses to start if
+`checkpoints/<run>/last.pth` exists. Ctrl+C / SIGTERM stops cleanly (exit code 3); `last.pth`
+keeps the last completed epoch.
+
+Metrics follow the official repo (ported code, checked numerically against it): set-level
+**mIoU** (main), **event-level mIoU** (mean over the 14 events), **F1_loc**, **F1_clf**, OA,
+per-class IoU. Model selection uses **val only**; test is evaluated once at the end.
+
+## Running on the cluster (fep, A100 / H100)
+
+One-time setup on fep:
+
+```bash
+git clone git@github.com:matei8/BRIGHT.git && cd BRIGHT     # then: git checkout <branch>
+# container (Python 3.11 + torch 2.5.1/CUDA 12.4); build on a node, or build locally and rsync:
+srun -A student -p dgxa100 --pty apptainer build --fakeroot ~/bright.sif cluster/bright.def
+# in ~/.bashrc:
+export BRIGHT_DATA_ROOT=/path/on/cluster/to/BRIGHT_DATASET   # holds pre-event/ post-event/ target/
+export BRIGHT_SIF=~/bright.sif
+```
+
+Submit **from the repo root**:
+
+```bash
+sbatch cluster/train.slurm unet_a_s42                          # H100 (default partition dgxh100)
+sbatch -p dgxa100 cluster/train.slurm unet_a_s42               # A100
+sbatch cluster/train.slurm unet_a_s43 --set train.seed=43      # another seed
+sbatch cluster/train.slurm unet_a_fp32 --set runtime.amp=none  # fp32 control run
+squeue -u $USER;  tail -f slurm-bright-<jobid>.out
+```
+
+The job copies the 21 GB dataset to node-local disk if there is room (otherwise reads the
+shared copy), trains with `--env cluster --resume`, then evaluates `best.pth` on val and test.
+Near the 24 h limit, SLURM's early SIGTERM makes training stop cleanly and the job
+**resubmits itself**; the new job resumes.
+
+Always `git pull` and commit before submitting: `run_config.json` records the commit, and a
+run from uncommitted code prints a warning because it can't be traced back.
+
 ## Decision: build it here, mirroring the official repo
 
 > **Build our own clean U-Net in this `codebase/`, implementing the exact
@@ -51,7 +185,8 @@ scripts, and per-run outputs each get their own place.
 ```
 codebase/
   config/
-    baseline.yaml            # paths, hyperparams, reduced schedule, seed, norm stats, flags
+    baseline.toml            # experiment: data, norm stats, splits, training recipe
+    env/{local,cluster}.toml # machine profiles layered on top (see Configuration)
   src/                       # importable library code
     dataset.py               # BrightDataset: 4-ch (optical 3 + SAR 1), official split
     transforms.py            # channel-aware normalize + crop/flip/rot (from imutils)
@@ -122,7 +257,7 @@ self-documenting and reproducible.
 
 ## Cropping
 
-Training crops 1024 tiles to **512** patches **on the fly** (random crop per sample each
+Training crops 1024 tiles to **640** patches (official recipe; `local` profile uses 512) **on the fly** (random crop per sample each
 epoch), matching the repo recipe — this keeps the informative-region oversampling
 (`cat_max_ratio`) and full augmentation variety. `scripts/preprocess.py --precrop` can
 instead cache fixed 512 patches to disk as an opt-in speed lever (config flag selects the
@@ -144,7 +279,7 @@ plots + `stats.json` (machine-readable, including the normalization constants) +
    ~1114 tiles vs Hawaii wildfire ~65) that motivates the **event-level mIoU** metric;
    per-event class breakdown (which events lack damaged/destroyed).
 3. **Image + normalization stats** — optical per-channel mean/std (vs ImageNet); **SAR
-   mean/std** (feeds `config/baseline.yaml`); intensity histograms; nodata / all-black
+   mean/std** (feeds `config/baseline.toml`); intensity histograms; nodata / all-black
    tile check; inverse- and median-frequency class weights as candidates for the E4
    targeted-loss experiment.
 4. **Qualitative overlays + SAR signal** — `pre-optical | post-SAR | target` panels for a
@@ -166,7 +301,7 @@ select `best.pth`; `evaluate.py` produces the final numbers and error analysis
 2. Port `architecture/unet.py`, `src/{losses,metrics,transforms,dataset,utils,engine}.py`.
 3. `scripts/preprocess.py` → compute and save optical/SAR normalization stats into config.
 4. `scripts/eda.py` → the four bundles → `results/eda/`.
-5. `config/baseline.yaml` → reduced schedule, batch/crop, seed, flags.
+5. `config/baseline.toml` → reduced schedule, batch/crop, seed, flags.
 6. `scripts/train.py`, `scripts/evaluate.py`.
 
 ## Verification

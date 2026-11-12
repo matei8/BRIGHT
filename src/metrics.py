@@ -95,3 +95,42 @@ class Evaluator(object):
 
     def reset(self):
         self.confusion_matrix = np.zeros((self.num_class,) * 2, dtype=np.longlong)
+
+
+# --------------------------- event-level evaluation ---------------------------
+# Event / disaster-type lists and matching as in the official infer_UNet.py: a tile
+# belongs to the first event (type) whose name occurs in its file name. Event-level
+# mIoU = mean over events of each event's 4-class mIoU (paper's second main metric).
+
+EVENTS = [
+    "turkey-earthquake", "hawaii-wildfire", "morocco-earthquake", "haiti-earthquake",
+    "la_palma-volcano", "congo-volcano", "beirut-explosion", "bata-explosion",
+    "libya-flood", "noto-earthquake", "marshall-wildfire", "ukraine-conflict",
+    "myanmar-hurricane", "mexico-hurricane",
+]
+DISASTER_TYPES = ["earthquake", "wildfire", "volcano", "explosion", "flood", "conflict", "hurricane"]
+
+
+class GroupEvaluator:
+    """One 4-class Evaluator per group (event or disaster type), keyed by name match."""
+
+    def __init__(self, groups, num_class=4):
+        self.groups = list(groups)
+        self.ev = {g: Evaluator(num_class) for g in self.groups}
+
+    def add(self, gt, pred, names):
+        for i, n in enumerate(names):
+            for g in self.groups:
+                if g in n:
+                    self.ev[g].add_batch(gt[i], pred[i])
+                    break
+
+    def per_group(self):
+        """{group: {'miou': .., 'iou_per_class': [..]}} for groups seen in this split."""
+        return {g: {"miou": float(e.Mean_Intersection_over_Union()),
+                    "iou_per_class": [float(v) for v in e.Intersection_over_Union()]}
+                for g, e in self.ev.items() if e.confusion_matrix.sum() > 0}
+
+    def mean_miou(self):
+        per = self.per_group()
+        return float(np.mean([v["miou"] for v in per.values()])) if per else float("nan")

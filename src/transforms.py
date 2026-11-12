@@ -15,10 +15,10 @@ import numpy as np
 IMAGENET_MEAN = [123.675, 116.28, 103.53]
 IMAGENET_STD = [58.395, 57.12, 57.375]
 
-# SAR normalization — PROVISIONAL, estimated over 150 random train tiles (raw 8-bit
-# amplitude). Replace with the full-train-split values computed by preprocess/EDA.
-SAR_MEAN = 59.121
-SAR_STD = 45.478
+# SAR normalization — full standard_ML train split (2918 tiles, raw 8-bit amplitude,
+# zeros included; train only). Recompute with scripts/sar_stats.py.
+SAR_MEAN = 56.823
+SAR_STD = 45.855
 
 
 def normalize_optical(img, mean=IMAGENET_MEAN, std=IMAGENET_STD):

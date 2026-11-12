@@ -1,0 +1,20 @@
+# Local smoke-test profile (small GPU, e.g. GTX 1060 6 GB / 8 GB laptop GPU).
+# Same pipeline, tiny run: checks data -> model -> loss -> metrics -> checkpoint end to end.
+# Its numbers are meaningless; never report them.
+# Data path: export BRIGHT_DATA_ROOT=/path/to/BRIGHT_DATASET
+[data]
+crop_size = 512
+
+[train]
+max_samples = 0          # use epochs below instead
+epochs = 2
+max_steps = 50           # steps per epoch
+train_batch_size = 2
+eval_batch_size = 1
+eval_tile_size = 512     # stitched windows, fits small VRAM
+eval_limit = 20          # 20 val tiles per in-loop validation
+val_every = 1
+
+[runtime]
+amp = "none"             # Pascal (GTX 10xx) has no bf16 and slow fp16; use "fp16" on RTX cards
+num_workers = 4

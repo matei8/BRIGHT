@@ -1,0 +1,16 @@
+# Apptainer image for BRIGHT training (Python 3.11 + PyTorch 2.5.1 / CUDA 12.4).
+# Build once, then copy the .sif to your cluster home:
+#   on the cluster:  srun -A student -p dgxa100 --pty apptainer build --fakeroot bright.sif cluster/bright.def
+#   or locally:      apptainer build --fakeroot bright.sif cluster/bright.def && rsync -avh bright.sif fep:~/
+Bootstrap: docker
+From: pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+
+%post
+    python -m pip install --no-cache-dir numpy imageio tqdm matplotlib pyyaml
+
+%environment
+    export PYTHONUNBUFFERED=1
+    export OMP_NUM_THREADS=1
+
+%test
+    python -c "import tomllib, torch, imageio; print('python ok, torch', torch.__version__)"

@@ -1,7 +1,11 @@
+# Experiment definition shared by every machine. Machine-specific settings
+# (workers, batch, precision, eval windowing) live in config/env/<profile>.toml and are
+# layered on top: baseline.toml -> env profile -> $BRIGHT_DATA_ROOT -> --set key=value.
+
 [data]
-dataset_root = "../dataset/BRIGHT" # pre-event/ post-event/ target/
+dataset_root = "../dataset/BRIGHT" # pre-event/ post-event/ target/  (override with $BRIGHT_DATA_ROOT)
 suffix = ".tif"
-crop_size = 512
+crop_size = 640      # official BRIGHT U-Net recipe (train_UNet.sh)
 ignore_index = 255 # padded / nodata label (excluded from loss & metrics)
 
 # Optical normalization (RGB) — ImageNet stats, as in the published baseline
@@ -9,10 +13,11 @@ ignore_index = 255 # padded / nodata label (excluded from loss & metrics)
 mean = [123.675, 116.28, 103.53]
 std = [58.395, 57.12, 57.375]
 
-# SAR normalization (raw 8-bit amplitude)
+# SAR normalization (raw 8-bit amplitude) — full standard_ML train split (2918 tiles,
+# zeros included; train only, no leakage). Recompute: python scripts/sar_stats.py
 [data.sar_norm]
-mean = 59.121
-std = 45.478
+mean = 56.823
+std = 45.855
 
 # Official standard_ML split files
 [splits]
@@ -27,22 +32,27 @@ val = false
 test = false
 
 [train]
-run_name = "unet_baseline_50_16"
+run_name = "unet_baseline"
 seed = 42
-epochs = 50
+epochs = 50            # used only when max_samples = 0
+# Schedule in SAMPLES, like the official --max_iters (which counts samples, not steps).
+# epochs = ceil(max_samples / samples_per_epoch); 800000 at batch 16 -> 275 epochs ~ 50k steps.
+# Independent of batch size, so changing the batch never silently shortens training.
+max_samples = 800000
 max_steps = 0          # 0 = full epochs; >0 caps steps per epoch (debug)
 train_batch_size = 16
 eval_batch_size = 1
-eval_tile_size = 512   # val/test: each 1024 tile -> 4 x 512 windows, stitched
+eval_tile_size = 0     # val/test window; 0 = full 1024 tile (official). 512 = 4 stitched windows (low VRAM)
+eval_limit = 0         # cap val tiles per in-loop validation (0 = all 450); final eval is always full
 learning_rate = 1e-4
 weight_decay = 5e-3
 lovasz_weight = 0.75
 num_classes = 4
 in_channels = 4
-val_every = 1          # validate every N epochs; best.pth = best val mIoU
+val_every = 10         # validate every N epochs; best.pth = best val mIoU
 
 [runtime]
-amp = true             # mixed precision for training (eval stays fp32)
+amp = "fp16"           # "none" | "fp16" (GradScaler) | "bf16" — training only, eval stays fp32
 deterministic = true   # cuDNN deterministic kernels (reproducible, a bit slower)
 num_workers = 4        # 0 = load in the main process (slower, simplest)
 pin_memory = true

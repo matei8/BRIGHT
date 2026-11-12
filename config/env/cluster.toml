@@ -1,0 +1,8 @@
+# Cluster profile (A100 / H100): full official schedule, 800k samples (~50k steps at batch 16).
+# Data path: cluster/train.slurm sets BRIGHT_DATA_ROOT (ideally to a node-local copy).
+[train]
+eval_batch_size = 4
+
+[runtime]
+amp = "bf16"             # ~2x TF32 throughput, no GradScaler needed
+num_workers = 16
