@@ -1,0 +1,8 @@
+# Cluster profile (A100 / H100). Full official schedule.
+# Data path: the SLURM script sets BRIGHT_DATA_ROOT (ideally to a node-local copy).
+[train]
+amp = "bf16"
+
+[loader]
+num_workers = 16
+eval_batch_size = 4

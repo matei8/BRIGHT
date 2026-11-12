@@ -1,8 +1,12 @@
 [data]
-dataset_root = "../dataset/BRIGHT" # pre-event/ post-event/ target/
+dataset_root = "../dataset/BRIGHT" # pre-event/ post-event/ target/  (override with $BRIGHT_DATA_ROOT)
 suffix = ".tif"
-crop_size = 512
+crop_size = 640  # official BRIGHT U-Net recipe
 ignore_index = 255 # padded / nodata label (excluded from loss & metrics)
+
+# Experiment definition shared by every machine. Machine-specific settings
+# (workers, batch, schedule length, precision) live in config/env/<profile>.toml
+# and are layered on top: base -> env profile -> $BRIGHT_DATA_ROOT -> --set key=value.
 
 # Optical normalization (RGB)
 [data.optical_norm]
@@ -11,8 +15,8 @@ std = [58.395, 57.12, 57.375]
 
 # SAR normalization
 [data.sar_norm]
-mean = 59.121
-std = 45.478
+mean = 56.823  # full train split (2918 tiles, raw uint8, zeros included)
+std = 45.855
 
 # Official standard_ML split files
 [splits]
@@ -25,3 +29,18 @@ test = "splits/standard_ML/test_set.txt"
 train = true
 val = false
 test = false
+
+# Training recipe (official BRIGHT U-Net). Env profiles may shrink these for smoke tests.
+[train]
+batch_size = 16
+max_steps = 50000        # = official max_iters 800k samples / batch 16
+lr = 1e-4
+weight_decay = 5e-3
+lovasz_weight = 0.75
+seed = 42
+amp = "none"             # "none" | "bf16" | "fp16"
+eval_every = 2500
+
+[loader]
+num_workers = 4
+eval_batch_size = 4

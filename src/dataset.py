@@ -39,8 +39,9 @@ class BrightDataset(Dataset):
         pre = np.asarray(imageio.imread(pre_p), np.float32)[:, :, 0:3]  # optical RGB (H,W,3)
         post = np.asarray(imageio.imread(post_p), np.float32)           # SAR (H,W)
 
-        if post.ndim == 2:
-            post = post[:, :, None]                                     # -> (H,W,1), NOT replicated
+        if post.ndim == 3:
+            post = post[:, :, 0]                                        # guard: keep one SAR band
+        post = post[:, :, None]                                         # -> (H,W,1), NOT replicated
 
         tgt = np.asarray(imageio.imread(tgt_p))                         # labels (H,W)
         return pre, post, tgt

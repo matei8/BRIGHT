@@ -1,0 +1,15 @@
+# Local smoke-test profile (e.g. GTX 1060, 6 GB). Same pipeline, tiny run:
+# checks that data -> model -> loss -> metrics -> checkpoint all work end to end.
+# Data path: export BRIGHT_DATA_ROOT=/path/to/BRIGHT_DATASET
+[data]
+crop_size = 512
+
+[train]
+batch_size = 2
+max_steps = 200
+eval_every = 100
+amp = "none"             # Pascal GPUs have no bf16 and slow fp16
+
+[loader]
+num_workers = 4
+eval_batch_size = 1
