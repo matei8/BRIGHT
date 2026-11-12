@@ -27,7 +27,7 @@ import torch  # noqa: E402
 from architecture.unet import UNet  # noqa: E402
 from src.config import DataConfig, TrainConfig, load_config  # noqa: E402
 from src.dataset import BrightDataset, build_loader  # noqa: E402
-from src.engine import early_fusion_forward, evaluate  # noqa: E402
+from src.engine import early_fusion_forward, evaluate, use_channels_last  # noqa: E402
 from src.utils import get_device, load_checkpoint  # noqa: E402
 
 CLASS_NAMES = ["background", "intact", "damaged", "destroyed"]
@@ -57,6 +57,8 @@ def main():
 
     model = UNet(in_channels=cfg.in_channels, num_classes=cfg.num_classes).to(device)
     state = load_checkpoint(ckpt_path, model, map_location=device)
+    if cfg.channels_last and device.type == "cuda":
+        use_channels_last(model)
     print(f"loaded {ckpt_path} (epoch {state.get('epoch')})")
 
     loader = build_loader(BrightDataset(dcfg), cfg.eval_batch_size, shuffle=False,

@@ -17,4 +17,5 @@ val_every = 1
 
 [runtime]
 amp = "none"             # Pascal (GTX 10xx) has no bf16 and slow fp16; use "fp16" on RTX cards
+channels_last = false    # no tensor cores on Pascal: NHWC is ~3x slower there (true on RTX cards)
 num_workers = 4

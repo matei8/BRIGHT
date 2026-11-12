@@ -36,7 +36,7 @@ import torch  # noqa: E402
 from architecture.unet import UNet  # noqa: E402
 from src.config import DataConfig, TrainConfig, load_config  # noqa: E402
 from src.dataset import BrightDataset, build_loader  # noqa: E402
-from src.engine import AMP_DTYPES, early_fusion_forward, evaluate, train_one_epoch  # noqa: E402
+from src.engine import AMP_DTYPES, early_fusion_forward, evaluate, train_one_epoch, use_channels_last  # noqa: E402
 from src.losses import segmentation_loss  # noqa: E402
 from src.utils import (get_device, git_info, load_checkpoint, machine_info, make_run_dirs,  # noqa: E402
                        rng_state, save_checkpoint, seed_worker, set_rng_state, set_seed)
@@ -126,6 +126,8 @@ def main():
     epochs = math.ceil(cfg.max_samples / samples_per_epoch) if cfg.max_samples > 0 else cfg.epochs
 
     model = UNet(in_channels=cfg.in_channels, num_classes=cfg.num_classes).to(device)
+    if cfg.channels_last and device.type == "cuda":
+        use_channels_last(model)  # before the optimizer, so its state matches the layout
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
     loss_fn = partial(segmentation_loss, ignore_index=train_dcfg.ignore_index,
                       lovasz_weight=cfg.lovasz_weight)
@@ -152,7 +154,8 @@ def main():
     with open(results_dir / f"run_config{tag}.json", "w") as f:
         json.dump(meta, f, indent=2, default=str)
 
-    print(f"device={device} ({meta['machine']['gpu'] or 'cpu'}) run={cfg.run_name} amp={cfg.amp}", flush=True)
+    print(f"device={device} ({meta['machine']['gpu'] or 'cpu'}) run={cfg.run_name} amp={cfg.amp} "
+          f"channels_last={cfg.channels_last} deterministic={cfg.deterministic}", flush=True)
     print(f"train: {len(train_loader.dataset)} tiles, {steps_per_epoch} steps/epoch "
           f"(batch {cfg.train_batch_size}, crop {train_dcfg.crop_size}) x {epochs} epochs = "
           f"{epochs * steps_per_epoch} steps / {epochs * samples_per_epoch} samples | "

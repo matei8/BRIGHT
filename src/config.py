@@ -174,6 +174,7 @@ class TrainConfig:
     val_every: int
     amp: str                   # 'none' | 'fp16' (GradScaler) | 'bf16'
     deterministic: bool
+    channels_last: bool        # NHWC memory format (tensor-core GPUs)
     num_workers: int
     pin_memory: bool
 
@@ -203,6 +204,7 @@ class TrainConfig:
             val_every=int(t.get("val_every", 1)),
             amp=amp,
             deterministic=bool(r.get("deterministic", True)),
+            channels_last=bool(r.get("channels_last", False)),
             num_workers=int(r.get("num_workers", 0)),
             pin_memory=bool(r.get("pin_memory", True)),
         )
