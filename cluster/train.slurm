@@ -38,8 +38,12 @@ echo "commit $(git rev-parse --short HEAD) ($(git rev-parse --abbrev-ref HEAD))"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 
 # --- stage the dataset to node-local disk (21 GB); fall back to the shared copy ---------
+# One folder per job (parallel runs on the same node must not share or delete each
+# other's copy), removed when the job ends so node-local disk is not left full.
 DATA="$SRC_DATA"
-LOCAL="${TMPDIR:-/tmp}/${USER}_bright_data"
+LOCAL="${TMPDIR:-/tmp}/${USER}_bright_${SLURM_JOB_ID:-$$}"
+cleanup() { [ -d "$LOCAL" ] && rm -rf "$LOCAL" && echo "removed staged data $LOCAL"; }
+trap cleanup EXIT
 need_kb=$(( 23 * 1024 * 1024 ))
 free_kb=$(df -Pk "$(dirname "$LOCAL")" | awk 'NR==2{print $4}')
 if [ "${BRIGHT_NO_STAGE:-0}" != "1" ] && [ "${free_kb:-0}" -gt "$need_kb" ]; then
