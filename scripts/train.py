@@ -163,6 +163,8 @@ def main():
           f"every {cfg.val_every} epochs{f', first {cfg.eval_limit} tiles' if cfg.eval_limit else ''})", flush=True)
     if meta["git"]["dirty"]:
         print("WARNING: uncommitted changes to tracked files; this run is not tied to a commit", flush=True)
+    elif meta["git"]["commit"] is None or meta["git"]["dirty"] is None:
+        print("WARNING: git commit/state unknown (no git here?); this run is not tied to a commit", flush=True)
 
     csv_path = results_dir / "metrics.csv"
     fields = ["epoch", "train_loss", "val_miou", "val_event_miou"] + [f"val_iou_{n}" for n in CLASS_NAMES] + \

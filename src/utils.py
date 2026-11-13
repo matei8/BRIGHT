@@ -91,8 +91,14 @@ def git_info(root: Path = CODEBASE_ROOT) -> dict:
             return subprocess.check_output(["git", *args], cwd=root, stderr=subprocess.DEVNULL).decode().strip()
         except Exception:
             return None
-    return {"commit": run("rev-parse", "HEAD"), "branch": run("rev-parse", "--abbrev-ref", "HEAD"),
-            "dirty": bool(run("status", "--porcelain", "--untracked-files=no"))}
+    commit = run("rev-parse", "HEAD")
+    if commit is None:  # no git (e.g. inside the container): use what the SLURM script recorded on the host
+        dirty = os.environ.get("BRIGHT_GIT_DIRTY")
+        return {"commit": os.environ.get("BRIGHT_GIT_COMMIT"), "branch": os.environ.get("BRIGHT_GIT_BRANCH"),
+                "dirty": None if dirty is None else dirty == "1"}  # None = unknown, not clean
+    status = run("status", "--porcelain", "--untracked-files=no")
+    return {"commit": commit, "branch": run("rev-parse", "--abbrev-ref", "HEAD"),
+            "dirty": None if status is None else bool(status)}
 
 
 def machine_info(device: torch.device) -> dict:

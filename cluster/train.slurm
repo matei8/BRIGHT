@@ -60,9 +60,19 @@ fi
 
 # `exec` replaces the calling subshell, so the PID we hold is the container/python process
 # itself (needed to forward SIGTERM). Always call run_py in a subshell: `run_py .. &` or `(run_py ..)`.
+# The container has no git, so record the code version here on the host for run_config.json.
+GIT_COMMIT=$(git -C "$REPO" rev-parse HEAD 2>/dev/null)
+GIT_BRANCH=$(git -C "$REPO" rev-parse --abbrev-ref HEAD 2>/dev/null)
+if [ -z "$GIT_COMMIT" ]; then GIT_DIRTY=""
+elif [ -n "$(git -C "$REPO" status --porcelain --untracked-files=no)" ]; then GIT_DIRTY=1
+else GIT_DIRTY=0; fi
+echo "code: ${GIT_BRANCH:-?} ${GIT_COMMIT:-unknown} (dirty=${GIT_DIRTY:-?})"
+
 run_py() {
     exec apptainer exec --nv --bind "$REPO" --bind "$DATA" --bind "$SRC_DATA" \
-        --env BRIGHT_DATA_ROOT="$DATA" "$SIF" python "$@"
+        --env BRIGHT_DATA_ROOT="$DATA" --env BRIGHT_GIT_COMMIT="$GIT_COMMIT" \
+        --env BRIGHT_GIT_BRANCH="$GIT_BRANCH" --env BRIGHT_GIT_DIRTY="$GIT_DIRTY" \
+        "$SIF" python "$@"
 }
 
 # --- train. In the background so the batch shell can forward SLURM's early SIGTERM. ----

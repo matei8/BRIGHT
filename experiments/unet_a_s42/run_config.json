@@ -1,0 +1,159 @@
+{
+  "config_file": "/export/home/proiecte/aux/andrei.ionescu2201/BRIGHT/config/baseline.toml",
+  "env_profile": "cluster",
+  "overrides": [
+    "train.run_name=\"unet_a_s42\""
+  ],
+  "train": {
+    "run_name": "unet_a_s42",
+    "seed": 42,
+    "epochs": 50,
+    "max_samples": 800000,
+    "max_steps": 0,
+    "train_batch_size": 16,
+    "eval_batch_size": 4,
+    "eval_tile_size": 0,
+    "eval_limit": 0,
+    "learning_rate": 0.0001,
+    "weight_decay": 0.005,
+    "lovasz_weight": 0.75,
+    "num_classes": 4,
+    "in_channels": 4,
+    "val_every": 10,
+    "amp": "bf16",
+    "deterministic": true,
+    "channels_last": true,
+    "num_workers": 16,
+    "pin_memory": true
+  },
+  "data_train": {
+    "split": "train",
+    "dataset_root": "/tmp/andrei.ionescu2201_bright_data",
+    "split_file": "/export/home/proiecte/aux/andrei.ionescu2201/BRIGHT/splits/standard_ML/train_set.txt",
+    "crop_size": 640,
+    "augment": true,
+    "ignore_index": 255,
+    "optical_mean": [
+      123.675,
+      116.28,
+      103.53
+    ],
+    "optical_std": [
+      58.395,
+      57.12,
+      57.375
+    ],
+    "sar_mean": 56.823,
+    "sar_std": 45.855,
+    "suffix": ".tif"
+  },
+  "data_val": {
+    "split": "val",
+    "dataset_root": "/tmp/andrei.ionescu2201_bright_data",
+    "split_file": "/export/home/proiecte/aux/andrei.ionescu2201/BRIGHT/splits/standard_ML/val_set.txt",
+    "crop_size": 640,
+    "augment": false,
+    "ignore_index": 255,
+    "optical_mean": [
+      123.675,
+      116.28,
+      103.53
+    ],
+    "optical_std": [
+      58.395,
+      57.12,
+      57.375
+    ],
+    "sar_mean": 56.823,
+    "sar_std": 45.855,
+    "suffix": ".tif"
+  },
+  "schedule": {
+    "epochs": 275,
+    "steps_per_epoch": 182,
+    "total_steps": 50050,
+    "total_samples": 800800
+  },
+  "resolved_config": {
+    "data": {
+      "dataset_root": "/tmp/andrei.ionescu2201_bright_data",
+      "suffix": ".tif",
+      "crop_size": 640,
+      "ignore_index": 255,
+      "optical_norm": {
+        "mean": [
+          123.675,
+          116.28,
+          103.53
+        ],
+        "std": [
+          58.395,
+          57.12,
+          57.375
+        ]
+      },
+      "sar_norm": {
+        "mean": 56.823,
+        "std": 45.855
+      }
+    },
+    "splits": {
+      "train": "splits/standard_ML/train_set.txt",
+      "val": "splits/standard_ML/val_set.txt",
+      "test": "splits/standard_ML/test_set.txt"
+    },
+    "augmentation": {
+      "train": true,
+      "val": false,
+      "test": false
+    },
+    "train": {
+      "run_name": "unet_a_s42",
+      "seed": 42,
+      "epochs": 50,
+      "max_samples": 800000,
+      "max_steps": 0,
+      "train_batch_size": 16,
+      "eval_batch_size": 4,
+      "eval_tile_size": 0,
+      "eval_limit": 0,
+      "learning_rate": 0.0001,
+      "weight_decay": 0.005,
+      "lovasz_weight": 0.75,
+      "num_classes": 4,
+      "in_channels": 4,
+      "val_every": 10
+    },
+    "runtime": {
+      "amp": "bf16",
+      "deterministic": true,
+      "channels_last": true,
+      "num_workers": 16,
+      "pin_memory": true
+    },
+    "_root": "/export/home/proiecte/aux/andrei.ionescu2201/BRIGHT"
+  },
+  "git": {
+    "commit": null,
+    "branch": null,
+    "dirty": false
+  },
+  "machine": {
+    "host": "dgxa100-ncit-wn01.grid.pub.ro",
+    "python": "3.11.10",
+    "torch": "2.5.1+cu124",
+    "cuda": "12.4",
+    "gpu": "NVIDIA A100-SXM4-80GB",
+    "slurm_job_id": "298917",
+    "argv": [
+      "scripts/train.py",
+      "--env",
+      "cluster",
+      "--run-name",
+      "unet_a_s42",
+      "--resume"
+    ],
+    "time": "2026-11-13T12:15:58"
+  },
+  "n_params": 31044292
+}
