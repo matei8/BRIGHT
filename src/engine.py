@@ -45,6 +45,11 @@ def early_fusion_forward(model, optical, sar):
     return model(to_model_format(model, torch.cat([optical, sar], dim=1)))
 
 
+def two_stream_forward(model, optical, sar):
+    """Variant B: optical (B,3,H,W) and SAR (B,1,H,W) go to separate encoders."""
+    return model(to_model_format(model, optical), to_model_format(model, sar))
+
+
 AMP_DTYPES = {"fp16": torch.float16, "bf16": torch.bfloat16}
 
 

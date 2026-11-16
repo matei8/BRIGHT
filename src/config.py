@@ -158,6 +158,7 @@ class TrainConfig:
     """Training / evaluation / runtime settings, from [train] and [runtime]."""
 
     run_name: str
+    model: str                 # architecture, see architecture/__init__.py ('unet' | 'two_stream')
     seed: int
     epochs: int
     max_samples: int           # >0: schedule in samples (official --max_iters); sets epochs
@@ -188,6 +189,7 @@ class TrainConfig:
             raise ValueError(f"runtime.amp must be one of {AMP_MODES}, got {amp!r}")
         return cls(
             run_name=str(t["run_name"]),
+            model=str(t.get("model", "unet")),
             seed=int(t.get("seed", 42)),
             epochs=int(t["epochs"]),
             max_samples=int(t.get("max_samples", 0)),

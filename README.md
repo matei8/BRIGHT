@@ -141,6 +141,7 @@ sbatch cluster/train.slurm unet_a_s42                          # H100 (default p
 sbatch -p dgxa100 cluster/train.slurm unet_a_s42               # A100
 sbatch cluster/train.slurm unet_a_s43 --set train.seed=43      # another seed
 sbatch cluster/train.slurm unet_a_fp32 --set runtime.amp=none  # fp32 control run
+sbatch cluster/train.slurm unet_b_s42 --set train.model=two_stream   # variant B, same recipe
 squeue -u $USER;  tail -f slurm-bright-<jobid>.out
 ```
 
@@ -199,7 +200,9 @@ codebase/
     engine.py                # shared train-epoch + evaluate() loop (reused by B–E)
     utils.py                 # seed, device, logging, run-dir + checkpoint helpers
   architecture/
-    unet.py                  # UNet(in_channels=4, num_classes=4) — variant A
+    __init__.py              # build_model(cfg): picks the model from train.model
+    unet.py                  # UNet(in_channels=4, num_classes=4) — variant A (train.model = "unet")
+    two_stream.py            # two encoders, per-level concat fusion — variant B (train.model = "two_stream")
   scripts/
     eda.py                   # EDA phase  → results/eda/
     preprocess.py            # compute optical+SAR norm stats [+ optional --precrop cache]
