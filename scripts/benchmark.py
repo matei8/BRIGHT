@@ -26,10 +26,10 @@ os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 
 import torch  # noqa: E402
 
-from architecture.unet import UNet  # noqa: E402
+from architecture import build_model  # noqa: E402
 from src.config import DataConfig, TrainConfig, load_config  # noqa: E402
 from src.dataset import BrightDataset, build_loader  # noqa: E402
-from src.engine import AMP_DTYPES  # noqa: E402
+from src.engine import AMP_DTYPES, use_channels_last  # noqa: E402
 from src.losses import segmentation_loss  # noqa: E402
 from src.utils import seed_worker  # noqa: E402
 
@@ -63,7 +63,7 @@ def bench_gpu(cfg, crop, steps, variants):
     # realistic class mix (~86% background) so the Lovasz sort sees typical data
     labels = torch.multinomial(torch.tensor([0.86, 0.11, 0.02, 0.01], device=dev), B * crop * crop,
                                replacement=True, generator=g).view(B, crop, crop)
-    print(f"\n== GPU step, synthetic data ({torch.cuda.get_device_name(0)}, batch {B}, crop {crop}, amp {cfg.amp})")
+    print(f"\n== GPU step, synthetic data ({torch.cuda.get_device_name(0)}, model {cfg.model}, batch {B}, crop {crop}, amp {cfg.amp})")
 
     for name, det, cl, comp in variants:
         torch.backends.cudnn.deterministic = det
@@ -71,22 +71,23 @@ def bench_gpu(cfg, crop, steps, variants):
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
         torch.manual_seed(0)
-        model = UNet(cfg.in_channels, cfg.num_classes).to(dev)
-        fmt = torch.channels_last if cl else torch.contiguous_format
-        model = model.to(memory_format=fmt)
+        model, forward_fn = build_model(cfg)
+        model = model.to(dev)
+        if cl:
+            use_channels_last(model)
         opt = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
         fwd = model
         if comp:
             try:
                 fwd = torch.compile(model)
+                fwd.channels_last = cl
             except Exception as e:  # noqa: BLE001
                 print(f"  {name:32s} torch.compile unavailable: {type(e).__name__}: {e}")
                 continue
-        x = torch.cat([optical, sar], 1).contiguous(memory_format=fmt)
 
         def step():
             with torch.autocast("cuda", dtype=amp_dtype, enabled=amp_dtype is not None):
-                logits = fwd(x)
+                logits = forward_fn(fwd, optical, sar)
             loss = segmentation_loss(logits, labels, lovasz_weight=cfg.lovasz_weight)
             opt.zero_grad(set_to_none=True)
             loss.backward()
@@ -108,7 +109,7 @@ def bench_gpu(cfg, crop, steps, variants):
 
         # share of the step spent in the loss (CE + Lovasz), timed separately
         with torch.no_grad(), torch.autocast("cuda", dtype=amp_dtype, enabled=amp_dtype is not None):
-            logits = fwd(x)
+            logits = forward_fn(fwd, optical, sar)
         torch.cuda.synchronize()
         t1 = time.time()
         for _ in range(10):

@@ -33,6 +33,7 @@ test = false
 
 [train]
 run_name = "unet_baseline"
+model = "unet"         # "unet" (variant A, early fusion) | "two_stream" (variant B), see architecture/
 seed = 42
 epochs = 50            # used only when max_samples = 0
 # Schedule in SAMPLES, like the official --max_iters (which counts samples, not steps).

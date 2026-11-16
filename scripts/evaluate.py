@@ -15,6 +15,7 @@ os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")  # must precede `import to
 import argparse
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,10 +25,10 @@ import imageio.v2 as imageio  # noqa: E402
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
-from architecture.unet import UNet  # noqa: E402
+from architecture import build_model  # noqa: E402
 from src.config import DataConfig, TrainConfig, load_config  # noqa: E402
 from src.dataset import BrightDataset, build_loader  # noqa: E402
-from src.engine import early_fusion_forward, evaluate, use_channels_last  # noqa: E402
+from src.engine import evaluate, use_channels_last  # noqa: E402
 from src.utils import get_device, load_checkpoint  # noqa: E402
 
 CLASS_NAMES = ["background", "intact", "damaged", "destroyed"]
@@ -55,7 +56,15 @@ def main():
         ckpt_path = ROOT / "checkpoints" / args.run / f"{args.ckpt}.pth"
     device = get_device()
 
-    model = UNet(in_channels=cfg.in_channels, num_classes=cfg.num_classes).to(device)
+    # use the architecture the checkpoint was trained with (older checkpoints: the config's)
+    saved = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+    saved_model = saved.get("extra", {}).get("train", {}).get("model")
+    if saved_model and saved_model != cfg.model:
+        print(f"checkpoint was trained with model={saved_model!r}; using it (config says {cfg.model!r})")
+        cfg = replace(cfg, model=saved_model)
+    del saved
+    model, forward_fn = build_model(cfg)
+    model = model.to(device)
     state = load_checkpoint(ckpt_path, model, map_location=device)
     if cfg.channels_last and device.type == "cuda":
         use_channels_last(model)
@@ -72,7 +81,7 @@ def main():
             for pm, n in zip(pred, names):
                 imageio.imwrite(pred_dir / f"{n}.png", pm.astype(np.uint8))
 
-    m = evaluate(model, loader, device, early_fusion_forward, cfg.num_classes,
+    m = evaluate(model, loader, device, forward_fn, cfg.num_classes,
                  cfg.eval_tile_size, desc=args.split, on_batch=on_batch)
 
     print(f"\n=== {args.run} | {args.split} ({len(loader.dataset)} tiles) | {ckpt_path.name} ===")

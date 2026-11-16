@@ -33,10 +33,10 @@ sys.path.insert(0, str(ROOT))
 
 import torch  # noqa: E402
 
-from architecture.unet import UNet  # noqa: E402
+from architecture import build_model  # noqa: E402
 from src.config import DataConfig, TrainConfig, load_config  # noqa: E402
 from src.dataset import BrightDataset, build_loader  # noqa: E402
-from src.engine import AMP_DTYPES, early_fusion_forward, evaluate, train_one_epoch, use_channels_last  # noqa: E402
+from src.engine import AMP_DTYPES, evaluate, train_one_epoch, use_channels_last  # noqa: E402
 from src.losses import segmentation_loss  # noqa: E402
 from src.utils import (get_device, git_info, load_checkpoint, machine_info, make_run_dirs,  # noqa: E402
                        rng_state, save_checkpoint, seed_worker, set_rng_state, set_seed)
@@ -125,7 +125,8 @@ def main():
     samples_per_epoch = steps_per_epoch * cfg.train_batch_size
     epochs = math.ceil(cfg.max_samples / samples_per_epoch) if cfg.max_samples > 0 else cfg.epochs
 
-    model = UNet(in_channels=cfg.in_channels, num_classes=cfg.num_classes).to(device)
+    model, forward_fn = build_model(cfg)
+    model = model.to(device)
     if cfg.channels_last and device.type == "cuda":
         use_channels_last(model)  # before the optimizer, so its state matches the layout
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
@@ -180,7 +181,7 @@ def main():
     for epoch in range(start_epoch, epochs + 1):
         t0, timing = time.time(), {}
         train_loss = train_one_epoch(model, train_loader, optimizer, device, loss_fn,
-                                     early_fusion_forward, scaler=scaler,
+                                     forward_fn, scaler=scaler,
                                      max_steps=cfg.max_steps or None,
                                      ignore_index=train_dcfg.ignore_index,
                                      desc=f"epoch {epoch}/{epochs}", amp_dtype=amp_dtype,
@@ -196,7 +197,7 @@ def main():
                f"{row['samples_per_s']} samples/s data-wait {100 * float(row['data_wait_frac']):.0f}%")
 
         if epoch % cfg.val_every == 0 or epoch == epochs:
-            m = evaluate(model, val_loader, device, early_fusion_forward, cfg.num_classes,
+            m = evaluate(model, val_loader, device, forward_fn, cfg.num_classes,
                          cfg.eval_tile_size, desc="val", limit=cfg.eval_limit, disable_pbar=quiet)
             row.update({"val_miou": f"{m['miou']:.5f}", "val_event_miou": f"{m['event_miou']:.5f}",
                         "val_loc_f1": f"{m['loc_f1']:.5f}", "val_clf_f1": f"{m['clf_f1']:.5f}",
