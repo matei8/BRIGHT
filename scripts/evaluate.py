@@ -44,8 +44,11 @@ def main():
     p.add_argument("--env", help="machine profile: local | cluster | <name> | path/to.toml")
     p.add_argument("--set", dest="overrides", action="append", default=[], metavar="KEY=VALUE")
     p.add_argument("--save-preds", action="store_true", help="write predicted class maps as PNG")
+    p.add_argument("--blank", choices=["sar", "optical"],
+                   help="modality ablation: replace this input by its normalization mean (all zeros after normalization)")
     args = p.parse_args()
 
+    tag = f"_blank-{args.blank}" if args.blank else ""  # keeps ablation outputs separate
     raw = load_config(args.config, args.env, args.overrides)
     cfg = TrainConfig.from_dict(raw)
     dcfg = DataConfig.from_dict(raw, args.split)
@@ -74,17 +77,28 @@ def main():
                           num_workers=num_workers, pin_memory=cfg.pin_memory)
     on_batch = None
     if args.save_preds:
-        pred_dir = ROOT / "results" / args.run / f"preds_{args.split}"
+        pred_dir = ROOT / "results" / args.run / f"preds_{args.split}{tag}"
         pred_dir.mkdir(parents=True, exist_ok=True)
 
         def on_batch(pred, names):
             for pm, n in zip(pred, names):
                 imageio.imwrite(pred_dir / f"{n}.png", pm.astype(np.uint8))
 
-    m = evaluate(model, loader, device, forward_fn, cfg.num_classes,
+    fwd = forward_fn
+    if args.blank == "sar":
+        def fwd(model, optical, sar):
+            return forward_fn(model, optical, torch.zeros_like(sar))
+    elif args.blank == "optical":
+        def fwd(model, optical, sar):
+            return forward_fn(model, torch.zeros_like(optical), sar)
+    if args.blank:
+        print(f"modality ablation: {args.blank} input replaced by its normalization mean (zeros)")
+
+    m = evaluate(model, loader, device, fwd, cfg.num_classes,
                  cfg.eval_tile_size, desc=args.split, on_batch=on_batch)
 
-    print(f"\n=== {args.run} | {args.split} ({len(loader.dataset)} tiles) | {ckpt_path.name} ===")
+    print(f"\n=== {args.run} | {args.split} ({len(loader.dataset)} tiles) | {ckpt_path.name}"
+          f"{f' | {args.blank} blanked' if args.blank else ''} ===")
     print(f"mIoU (set-level) : {100 * m['miou']:.2f}")
     print(f"mIoU (event-level): {100 * m['event_miou']:.2f}  (mean over {len(m['per_event'])} events)")
     for n, v in zip(CLASS_NAMES, m["iou_per_class"]):
@@ -98,11 +112,11 @@ def main():
     for e, v in m["per_event"].items():
         print(f"  {e:<20}: {100 * v['miou']:.2f}")
 
-    out = ROOT / "results" / args.run / f"eval_{args.split}_{ckpt_path.stem}.json"
+    out = ROOT / "results" / args.run / f"eval_{args.split}_{ckpt_path.stem}{tag}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w") as f:
         json.dump({"checkpoint": str(ckpt_path), "epoch": state.get("epoch"), "split": args.split,
-                   "metrics": m}, f, indent=2)
+                   "blank": args.blank, "metrics": m}, f, indent=2)
     print(f"\nwrote {out}")
 
 
