@@ -41,6 +41,7 @@ Delete `last.pth` once a run has finished; it is only needed to resume.
 | run | trained by | checkpoint location |
 |---|---|---|
 | unet_a_s42 | Andrei | fep: `~andrei.ionescu2201/BRIGHT/checkpoints/unet_a_s42/best.pth` |
+| unet_b_s42 | Andrei | fep: `~andrei.ionescu2201/BRIGHT/checkpoints/unet_b_s42/best.pth` |
 
 ## Results: test (best checkpoint on val)
 
@@ -52,6 +53,7 @@ Per group, mean ± std over seeds:
 | group | seeds | mIoU | event mIoU | IoU bg | IoU intact | IoU damaged | IoU destroyed | F1_loc | F1_clf | OA |
 |---|---|---|---|---|---|---|---|---|---|---|
 | unet_a | 42 | 64.31 | 48.59 | 96.24 | 71.13 | 37.60 | 52.26 | 88.07 | 70.03 | 95.47 |
+| unet_b | 42 | 64.59 | 49.12 | 96.31 | 71.72 | 37.83 | 52.51 | 88.22 | 70.18 | 95.58 |
 <!-- results:test-groups:end -->
 
 Per run:
@@ -60,6 +62,7 @@ Per run:
 | run | seed | best epoch | mIoU | event mIoU | IoU bg | IoU intact | IoU damaged | IoU destroyed | F1_loc | F1_clf | OA | commit | GPU |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | unet_a_s42 | 42 | 270 | 64.31 | 48.59 | 96.24 | 71.13 | 37.60 | 52.26 | 88.07 | 70.03 | 95.47 | ? | A100-SXM4-80GB |
+| unet_b_s42 | 42 | 270 | 64.59 | 49.12 | 96.31 | 71.72 | 37.83 | 52.51 | 88.22 | 70.18 | 95.58 | f30e943 | H100 80GB HBM3 |
 <!-- results:test-runs:end -->
 
 Reference: official BRIGHT U-Net, test mIoU **64.94** (6-channel input, fp32).
